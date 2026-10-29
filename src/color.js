@@ -4,6 +4,15 @@
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const h2 = (n) => clamp(Math.round(n), 0, 255).toString(16).padStart(2, "0");
 
+const NUM = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+// Strict number: NaN for empty/unknown-suffix strings (unlike unary +).
+const num = (str, pct) => (NUM.test(pct ? str.replace(/%$/, "") : str) ? parseFloat(str) : NaN);
+const args = (body) => {
+  const parts = body.split(",").map((x) => x.trim());
+  return parts.length === 3 || parts.length === 4 ? parts : null;
+};
+const finite = (c) => (Object.values(c).every(Number.isFinite) ? c : null);
+
 function parseColor(input) {
   const s = String(input).trim().toLowerCase();
 
@@ -20,22 +29,24 @@ function parseColor(input) {
   // rgb / rgba
   m = /^rgba?\(([^)]+)\)$/.exec(s);
   if (m) {
-    const parts = m[1].split(",").map((x) => x.trim());
-    if (parts.length < 3) return null;
-    return {
-      r: clamp(+parts[0], 0, 255),
-      g: clamp(+parts[1], 0, 255),
-      b: clamp(+parts[2], 0, 255),
-      a: parts[3] === undefined ? 1 : clamp(+parts[3], 0, 1),
-    };
+    const parts = args(m[1]);
+    if (!parts) return null;
+    return finite({
+      r: clamp(num(parts[0]), 0, 255),
+      g: clamp(num(parts[1]), 0, 255),
+      b: clamp(num(parts[2]), 0, 255),
+      a: parts[3] === undefined ? 1 : clamp(num(parts[3]), 0, 1),
+    });
   }
   // hsl / hsla
   m = /^hsla?\(([^)]+)\)$/.exec(s);
   if (m) {
-    const parts = m[1].split(",").map((x) => x.trim());
-    if (parts.length < 3) return null;
-    const rgb = hslToRgb(+parts[0], parseFloat(parts[1]), parseFloat(parts[2]));
-    return { ...rgb, a: parts[3] === undefined ? 1 : clamp(+parts[3], 0, 1) };
+    const parts = args(m[1]);
+    if (!parts) return null;
+    const [h, sat, lig] = [num(parts[0]), num(parts[1], true), num(parts[2], true)];
+    if (Number.isNaN(h + sat + lig)) return null;
+    const rgb = hslToRgb(h, sat, lig);
+    return finite({ ...rgb, a: parts[3] === undefined ? 1 : clamp(num(parts[3]), 0, 1) });
   }
   return null;
 }
